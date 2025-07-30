@@ -11,7 +11,7 @@ public class YAMLParseTest {
 
     @Test
     void testSerializeAndParseNote() {
-        YAMLHandler handler = new YAMLHandler();
+        YAMLParse handler = new YAMLParse();
         UUID id = UUID.randomUUID();
         LocalDateTime now = LocalDateTime.now();
 

@@ -27,5 +27,20 @@ public class YAMLParse {
         return writer.toString();
     }
 
-    public
+    public Note parse (String fileContent) {
+        String[] parts = fileContent.split("---\\s*", 3);
+        if (parts.length <3) throw new IllegalArgumentException("Invaild note Format");
+
+        Yaml yaml = new Yaml();
+        Map<String, Object> yamlMap =yaml.load(new StringReader (parts[1]));
+
+        UUID id =UUID.fromString ((String) yamlMap.get("id"));
+        String title = (String) yamlMap.get("title");
+        List<String> tags = (List<String>) yamlMap.get("tags");
+        LocalDateTime createdAt = LocalDateTime.parse ((String) yamlMap.get("created_at"));
+        LocalDateTime updatedAt = LocalDateTime.parse ((String) yamlMap.get("updated_at"));
+        String content = parts[2].trim();
+
+        return new Note(id, title, content, tags, createdAt, updatedAt);
+    }
 }
