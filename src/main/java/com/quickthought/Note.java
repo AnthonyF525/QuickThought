@@ -1,8 +1,10 @@
 package com.quickthought;
 
+import java.util.ArrayList;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
+import java.time.format.DateTimeFormatter;
 
 public class Note {
     private UUID id;
@@ -12,13 +14,24 @@ public class Note {
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 
-    public Note(UUID id, String title, String content, List<String> tags, LocalDateTime createdAt, LocalDateTime updatedAt) {
-        this.id = id;
+    
+    public Note(String title, String content, List<String> tags) {
+        this.id = UUID.randomUUID();
         this.title = title;
         this.content = content;
-        this.tags = tags;
-        this.createdAt = createdAt;
-        this.updatedAt = updatedAt;
+        this.tags = new ArrayList<>(tags != null ? tags : new ArrayList<>());
+        this.createdAt = LocalDateTime.now();
+        this.updatedAt = LocalDateTime.now();
+    }
+
+    
+    public Note(UUID id, String title, String content, List<String> tags, LocalDateTime createdAt, LocalDateTime updatedAt) {
+        this.id = id;  // Use the provided ID, don't generate new one
+        this.title = title;
+        this.content = content;
+        this.tags = new ArrayList<>(tags != null ? tags : new ArrayList<>());
+        this.createdAt = createdAt;  // Use provided timestamp
+        this.updatedAt = updatedAt;  // Use provided timestamp
     }
 
     //Getters
@@ -35,7 +48,7 @@ public class Note {
     }
 
     public List<String> getTags() {
-        return tags;
+        return new ArrayList<>(tags);
     }
 
     public LocalDateTime getCreatedAt() {
@@ -49,17 +62,26 @@ public class Note {
     //Setters
     public void setTitle(String title) {
         this.title = title;
+        this.updatedAt = LocalDateTime.now();
     }
 
-    public void SetContent(String content) {
+    public void setContent(String content) {  
         this.content = content;
+        this.updatedAt = LocalDateTime.now();
     }
     
     public void setTags(List<String> tags) {
-        this.tags = tags;
+        this.tags = new ArrayList<>(tags != null ? tags : new ArrayList<>());
+        this.updatedAt = LocalDateTime.now();
     }
 
-    public void setUpdatedAt(LocalDateTime updateAt) {
+    public void setUpdatedAt(LocalDateTime updatedAt) {  
         this.updatedAt = updatedAt;
+    }
+
+    @Override
+    public String toString() {
+        return String.format("Note{id=%s, title='%s', tags=%s}", 
+            id.toString().substring(0, 8), title, tags);
     }
 }

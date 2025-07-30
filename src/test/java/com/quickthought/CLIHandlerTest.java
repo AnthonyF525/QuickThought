@@ -7,6 +7,8 @@ import java.nio.file.Path;
 import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
 import static org.junit.jupiter.api.Assertions.*;
+import java.util.HashMap;  
+import java.util.Map; 
 
 public class CLIHandlerTest {
 
@@ -23,7 +25,7 @@ public class CLIHandlerTest {
         originalOut = System.out;
         System.setOut(new PrintStream(outputStream));
 
-        cliHandler = new CLIHander(tempDir.toString());
+        cliHandler = new CLIHandler(tempDir.toString());
     }
 
     @Test
@@ -40,14 +42,15 @@ public class CLIHandlerTest {
     void testExecuteCreateCommand() {
         Map<String, String> options = new HashMap<>();
         options.put("title", "Test Note");
-        options.put("contnet", "Test content");
+        options.put("content", "Test content");
 
         ParsedCommand command = new ParsedCommand("create", options);
         boolean result = cliHandler.execute(command);
         
         assertTrue(result);
         String output = outputStream.toString();
-        assertTrue(output.contains("Note created successfully"));
+        assertTrue(output.contains("Thought created successfully"));
+        
     }
 
     @Test
@@ -61,6 +64,6 @@ public class CLIHandlerTest {
         cliHandler.handleCommand(listArgs);
 
         String output = outputStream.toString();
-        assertTrue(output.contains("intergation Test")),
+        assertTrue(output.contains("Integration Test"));
     }
 }
