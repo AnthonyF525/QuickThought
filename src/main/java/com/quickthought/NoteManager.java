@@ -4,7 +4,6 @@ import java.util.List;
 import java.util.ArrayList;
 import java.util.Map;
 import java.util.Objects;
-import java.util.HashMap;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import java.io.File;
@@ -19,12 +18,10 @@ import java.io.*;
 public class NoteManager {
 
     private final String workingDirectory;
-    private final Map<UUID, Note> notes;
     private final YAMLParse yamlParser;
 
     public NoteManager(String workingDirectory) {
         this.workingDirectory = workingDirectory;
-        this.notes = new HashMap<>();
         this.yamlParser = new YAMLParse();
 
         File dir = new File(workingDirectory);
@@ -35,7 +32,6 @@ public class NoteManager {
      
     public Note createNote(String title, String content, List<String> tags) {
         Note note = new Note(title, content, tags);
-        notes.put(note.getId(), note);
         
 
         String yamlContent = yamlParser.serialize(note);
@@ -72,24 +68,48 @@ public class NoteManager {
     }
 
     public Note getNote(UUID id) {
-        return notes.get(id);
+        Path filePath = Paths.get(workingDirectory, id + ".md");
+        if (Files.exists(filePath)) {
+            return loadNoteFromFile(filePath);
+        }
+        return null;
     }
 
     public boolean deleteNote(UUID id) {
-        return notes.remove(id) != null;
+        Path filePath = Paths.get(workingDirectory, id + ".md");
+        try {
+            return Files.deleteIfExists(filePath);  // ← Actually delete the file
+        } catch (IOException e) {
+            return false;
+        }
     }
 
     public List<Note> searchNotes(String query) {
-        List<Note> results = new ArrayList<>();
-        for (Note note : notes.values()) {
-            if (note.getTitle().toLowerCase().contains(query.toLowerCase()) || note.getContent().toLowerCase().contains(query.toLowerCase())) {
-                results.add(note);
-            }
-        }
-        return results;
+         return getAllNotes().stream()
+        .filter(note -> 
+            note.getTitle().toLowerCase().contains(query.toLowerCase()) || 
+            note.getContent().toLowerCase().contains(query.toLowerCase()))
+        .collect(Collectors.toList());
     }
 
     public String getWorkingDirectory() {
         return workingDirectory;
+    }
+
+    public Note parseAndCreateNote(String content) {
+         // Parse the note using YAMLParse
+        Note note = yamlParser.parse(content);
+    
+        // Save it to the notes directory with proper filename
+        String yamlContent = yamlParser.serialize(note);
+        Path filePath = Paths.get(workingDirectory, note.getId() + ".md");
+    
+        try {
+            Files.write(filePath, yamlContent.getBytes());
+        } catch (IOException e) {
+            throw new RuntimeException("Failed to save imported note", e);
+        }
+    
+        return note;
     }
 }

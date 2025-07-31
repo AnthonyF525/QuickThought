@@ -8,6 +8,9 @@ import java.util.Arrays;
 import java.util.UUID;
 import java.util.Set;
 import java.util.stream.Collectors;
+import java.nio.file.Files;
+import java.nio.file.Paths;
+import java.nio.file.Path;
 
 public class CLIHandler {
 
@@ -52,6 +55,8 @@ public class CLIHandler {
                 return executeSearch(parsedCommand.getOptions());
             case "stats":
                 return executeStats(parsedCommand.getOptions());
+            case "import":  // Add this line
+                return executeImport(parsedCommand.getOptions());
             case "help":
             case "--help":
                 return executeHelp();
@@ -197,6 +202,7 @@ public class CLIHandler {
         System.out.println("  list [--verbose]");
         System.out.println("  read --id <note-id>");
         System.out.println("  search --query <search-term>");
+        System.out.println("  import --file <path-to-file>");
         System.out.println("  stats");
         System.out.println("  help");
         System.out.println();
@@ -206,6 +212,36 @@ public class CLIHandler {
         System.out.println("  quickthought search --query \"important\"");
         
         return true;
+    }
+
+    private boolean executeImport(Map<String, String> options) {
+        String filePath = options.get("file");
+        if (filePath == null) {
+            System.out.println("Error: --file required for import");
+            System.out.println("Usage: import --file path/to/note.md");
+            return false;
+        }
+    
+        try {
+            java.nio.file.Path sourceFile = java.nio.file.Paths.get(filePath);
+            if (!java.nio.file.Files.exists(sourceFile)) {
+                System.out.println("Error: File not found: " + filePath);
+                return false;
+            }
+        
+            String content = java.nio.file.Files.readString(sourceFile);
+            Note note = noteManager.parseAndCreateNote(content);  // You'll need to add this method to NoteManager
+        
+            System.out.println("Note imported successfully!");
+            System.out.println("Title: " + note.getTitle());
+            System.out.println("ID: " + note.getId().toString().substring(0, 8));
+            System.out.println("Tags: " + note.getTags());
+        
+            return true;
+        } catch (Exception e) {
+            System.out.println("Error importing file: " + e.getMessage());
+            return false;
+        }
     }
 }
 
