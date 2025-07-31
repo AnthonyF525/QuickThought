@@ -18,12 +18,11 @@ public class QuickThought {
             String notesDirectory = System.getProperty("quickthought.dir",
                 System.getProperty("user.dir") + "/notes");
 
-            System.out.println("Notes Directory: " + notesDirectory);
+            
             
             CLIHandler cliHandler = new CLIHandler(notesDirectory);
             
-            String currentDirectory = System.getProperty("user.dir");
-                System.out.println(currentDirectory + "****"); 
+           
 
             while (true) {
                 System.out.print("quickthought> ");
@@ -62,14 +61,28 @@ public class QuickThought {
     }
     
     private static String[] parseInput(String input) {
-        
+
+
         java.util.List<String> args = new java.util.ArrayList<>();
         boolean inQuotes = false;
         StringBuilder current = new StringBuilder();
+        char quoteChar = '"';
         
-        for (char c : input.toCharArray()) {
+        for (int i = 0; i < input.length(); i++) {
+            char c = input.charAt(i);
+            
             if (c == '"' || c == '\'') {
-                inQuotes = !inQuotes;
+                if (!inQuotes) {
+                    inQuotes = true;
+                    quoteChar = c;
+                } else if (c == quoteChar) {
+                    inQuotes = false;
+                    args.add(current.toString());
+                    current = new StringBuilder();
+                    continue;
+                } else {
+                    current.append(c);
+                }
             } else if (c == ' ' && !inQuotes) {
                 if (current.length() > 0) {
                     args.add(current.toString());
@@ -80,10 +93,12 @@ public class QuickThought {
             }
         }
         
+        
         if (current.length() > 0) {
             args.add(current.toString());
         }
-        
+
+
         return args.toArray(new String[0]);
     }
     
@@ -102,6 +117,7 @@ public class QuickThought {
         System.out.println("*  |   | / /_/ // /_/ /_  / / /__ _  ,<                   |   | ");
         System.out.println("*  |   | \\___\\_\\\\__,_/ /_/  \\___/ /_/|_|                  |   | ");
         System.out.println("*  \\   /                                                  \\   / ");
+        System.out.println("*   > <                                                    > < ");
         System.out.println("*  /   \\ _____________                      ______ _____  /   \\ ");
         System.out.println("*  |   | ___  __/__  /___________  ________ ___  /___  /_ |   | ");
         System.out.println("*  |   | __  /  __  __ \\  __ \\  / / /_  __ `/_  __ \\  __/ |   | ");

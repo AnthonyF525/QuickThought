@@ -17,8 +17,11 @@ public class YAMLParse {
         yamlMap.put("created_at", note.getCreatedAt().toString());
         yamlMap.put("updated_at", note.getUpdatedAt().toString());
 
+
         Yaml yaml = new Yaml();
         StringWriter writer = new StringWriter();
+
+        
         writer.write("---\n");
         yaml.dump(yamlMap, writer);
         writer.write("---\n");

@@ -23,21 +23,36 @@ public class CLIHandler {
     }
 
     public ParsedCommand parseArgs(String[] args) {
+        
         if(args.length == 0) {
             return new ParsedCommand("help", new HashMap<>());
         }
 
         String command = args[0];
         Map<String, String> options = new HashMap<>();
+        List<String> positionalArgs = new ArrayList<>();
         for (int i = 1; i < args.length; i++) {
             if (args[i].startsWith("--")) {
                 String key = args[i].substring(2);
-                if (i + 1 < args.length && !args[i +1].startsWith("--")) {
-                    options.put(key,args[i + 1]);
+                if (i + 1 < args.length && !args[i + 1].startsWith("--")) {
+                    options.put(key, args[i + 1]);
                     i++;
                 } else {
                     options.put(key, "true");
                 }
+            } else {
+                positionalArgs.add(args[i]);
+            }
+        }
+
+        if ("create".equals(command) && !positionalArgs.isEmpty()) {
+            if (!options.containsKey("title") && positionalArgs.size() >= 1) {
+                options.put("title", positionalArgs.get(0));
+            }
+            if (!options.containsKey("content") && positionalArgs.size() >= 2) {
+                List<String> contentWords = positionalArgs.subList(1, positionalArgs.size());
+                options.put("content", String.join(" ", contentWords));
+            
             }
         }
         return new ParsedCommand(command, options);
@@ -91,6 +106,7 @@ public class CLIHandler {
             Arrays.asList(tags.split(","));
 
         Note note = noteManager.createNote(title, content, tagList);
+
         System.out.println("Thought created successfully with ID: " + note.getId());
         return true;
     }
@@ -198,7 +214,8 @@ public class CLIHandler {
         System.out.println("Usage: quickthought <command> [options]");
         System.out.println();
         System.out.println("Commands:");
-        System.out.println("  create --title <title> [--content <content>] [--tags <tag1,tag2>]");
+        System.out.println("  create <title> [<content>] [--tags <tag1,tag2>]  # Simple create");
+        System.out.println("  create --title <title> [--content <content>]  # Full create");
         System.out.println("  list [--verbose]");
         System.out.println("  read --id <note-id>");
         System.out.println("  search --query <search-term>");
