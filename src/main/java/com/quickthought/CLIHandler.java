@@ -23,8 +23,8 @@ public class CLIHandler {
     }
 
     public ParsedCommand parseArgs(String[] args) {
-        
-        if(args.length == 0) {
+
+        if (args.length == 0) {
             return new ParsedCommand("help", new HashMap<>());
         }
 
@@ -52,7 +52,7 @@ public class CLIHandler {
             if (!options.containsKey("content") && positionalArgs.size() >= 2) {
                 List<String> contentWords = positionalArgs.subList(1, positionalArgs.size());
                 options.put("content", String.join(" ", contentWords));
-            
+
             }
         }
         return new ParsedCommand(command, options);
@@ -70,8 +70,10 @@ public class CLIHandler {
                 return executeSearch(parsedCommand.getOptions());
             case "stats":
                 return executeStats(parsedCommand.getOptions());
-            case "import":  // Add this line
+            case "import": // Add this line
                 return executeImport(parsedCommand.getOptions());
+            case "edit": // ← ADD THIS NEW CASE
+                return executeEdit(parsedCommand.getOptions());
             case "help":
             case "--help":
                 return executeHelp();
@@ -101,9 +103,7 @@ public class CLIHandler {
             return false;
         }
 
-        List<String> tagList = tags.isEmpty() ?
-            new ArrayList<>():
-            Arrays.asList(tags.split(","));
+        List<String> tagList = tags.isEmpty() ? new ArrayList<>() : Arrays.asList(tags.split(","));
 
         Note note = noteManager.createNote(title, content, tagList);
 
@@ -113,12 +113,12 @@ public class CLIHandler {
 
     private boolean executeList(Map<String, String> options) {
         List<Note> notes = noteManager.getAllNotes();
-        
+
         if (notes.isEmpty()) {
             System.out.println("No notes found.");
             return true;
         }
-        
+
         System.out.println("Found " + notes.size() + " note(s):");
         for (Note note : notes) {
             System.out.println("- [" + note.getId().toString().substring(0, 8) + "] " + note.getTitle());
@@ -137,27 +137,27 @@ public class CLIHandler {
             System.out.println("Error: --id required for read command");
             return false;
         }
-        
+
         try {
             UUID noteId = UUID.fromString(id);
             Note note = noteManager.getNote(noteId);
-            
+
             if (note == null) {
                 System.out.println("Note not found with ID: " + id);
                 return false;
             }
-            
+
             System.out.println("Title: " + note.getTitle());
             System.out.println("Content: " + note.getContent());
             System.out.println("Tags: " + note.getTags());
             System.out.println("Created: " + note.getCreatedAt());
             System.out.println("Updated: " + note.getUpdatedAt());
-            
+
         } catch (IllegalArgumentException e) {
             System.out.println("Error: Invalid ID format");
             return false;
         }
-        
+
         return true;
     }
 
@@ -167,44 +167,44 @@ public class CLIHandler {
             System.out.println("Error: --query required for search command");
             return false;
         }
-        
+
         List<Note> results = noteManager.searchNotes(query);
-        
+
         if (results.isEmpty()) {
             System.out.println("No notes found matching: " + query);
             return true;
         }
-        
+
         System.out.println("Found " + results.size() + " note(s) matching '" + query + "':");
         for (Note note : results) {
             System.out.println("- [" + note.getId().toString().substring(0, 8) + "] " + note.getTitle());
         }
-        
+
         return true;
     }
 
     private boolean executeStats(Map<String, String> options) {
         List<Note> notes = noteManager.getAllNotes();
-        
+
         System.out.println("=== QuickThought Statistics ===");
         System.out.println("Total notes: " + notes.size());
-        
+
         if (!notes.isEmpty()) {
             int totalContent = notes.stream()
-                .mapToInt(note -> note.getContent().length())
-                .sum();
-            
+                    .mapToInt(note -> note.getContent().length())
+                    .sum();
+
             System.out.println("Average content length: " + (totalContent / notes.size()) + " characters");
-            
+
             // Count unique tags
             Set<String> allTags = notes.stream()
-                .flatMap(note -> note.getTags().stream())
-                .collect(Collectors.toSet());
-            
+                    .flatMap(note -> note.getTags().stream())
+                    .collect(Collectors.toSet());
+
             System.out.println("Unique tags: " + allTags.size());
             System.out.println("Working directory: " + workingDirectory);
         }
-        
+
         return true;
     }
 
@@ -218,6 +218,8 @@ public class CLIHandler {
         System.out.println("  create --title <title> [--content <content>]  # Full create");
         System.out.println("  list [--verbose]");
         System.out.println("  read --id <note-id>");
+        System.out.println("  edit --id <note-id>");                                   
+        System.out.println("  edit --title <note-title>");     
         System.out.println("  search --query <search-term>");
         System.out.println("  import --file <path-to-file>");
         System.out.println("  stats");
@@ -225,9 +227,11 @@ public class CLIHandler {
         System.out.println();
         System.out.println("Examples:");
         System.out.println("  quickthought create --title \"My Note\" --content \"Note content\"");
+        System.out.println("  quickthought edit --id 90d0f871");                      
+        System.out.println("  quickthought edit --title \"test7\"");                  
         System.out.println("  quickthought list --verbose");
         System.out.println("  quickthought search --query \"important\"");
-        
+
         return true;
     }
 
@@ -238,28 +242,97 @@ public class CLIHandler {
             System.out.println("Usage: import --file path/to/note.md");
             return false;
         }
-    
+
+        System.out.println("DEBUG: Trying to import: " + filePath);
+
         try {
             java.nio.file.Path sourceFile = java.nio.file.Paths.get(filePath);
             if (!java.nio.file.Files.exists(sourceFile)) {
                 System.out.println("Error: File not found: " + filePath);
                 return false;
             }
-        
+
             String content = java.nio.file.Files.readString(sourceFile);
-            Note note = noteManager.parseAndCreateNote(content);  // You'll need to add this method to NoteManager
-        
+            System.out.println("DEBUG: File content length: " + content.length());
+            Note note = noteManager.parseAndCreateNote(content); 
+
             System.out.println("Note imported successfully!");
             System.out.println("Title: " + note.getTitle());
             System.out.println("ID: " + note.getId().toString().substring(0, 8));
             System.out.println("Tags: " + note.getTags());
-        
+
             return true;
         } catch (Exception e) {
             System.out.println("Error importing file: " + e.getMessage());
+            e.printStackTrace(); 
             return false;
         }
     }
+
+    private boolean executeEdit(Map<String, String> options) {
+        String id = options.get("id");
+        String title = options.get("title");
+    
+        if (id == null && title == null) {
+            System.out.println("Error: Specify either --id or --title");
+            System.out.println("Usage:");
+            System.out.println("edit --id <note-id>");
+            System.out.println("edit --title <note-title>");
+            return false;
+        }   
+    
+        try {
+            Note noteToEdit = null;
+        
+            if (id != null) {
+                // Find note by ID
+                noteToEdit = findNoteById(id);
+            } else {
+                // Find note by title
+                noteToEdit = findNoteByTitle(title);
+            }
+        
+            if (noteToEdit == null) {
+                System.out.println("Note not found");
+                return false;
+            }
+        
+            // Get the file path
+            String filePath = workingDirectory + "/" + noteToEdit.getId() + ".md";
+        
+            System.out.println("Opening note for editing: " + noteToEdit.getTitle());
+            System.out.println("File: " + noteToEdit.getId().toString().substring(0, 8) + ".md");
+        
+            // Open in nano editor
+            EditorTest.manualTestNanoEditor(filePath);
+        
+            System.out.println("Edit session completed");
+            System.out.println("Note: Changes are automatically saved");
+        
+            return true;
+        
+        } catch (Exception e) {
+            System.out.println("Error editing note: " + e.getMessage());
+            return false;
+        }
+    }
+
+    private Note findNoteById(String id) {
+        List<Note> notes = noteManager.getAllNotes();
+        return notes.stream()
+                .filter(note -> note.getId().toString().startsWith(id))
+                .findFirst()
+                .orElse(null);
+    }
+
+    private Note findNoteByTitle(String title) {
+        List<Note> notes = noteManager.getAllNotes();
+        return notes.stream()
+                .filter(note -> note.getTitle().equals(title))
+                .findFirst()
+                .orElse(null);
+    }
+
 }
 
 class ParsedCommand {
@@ -271,10 +344,11 @@ class ParsedCommand {
         this.options = options;
     }
 
-    public String getCommand () { 
-        return command; 
+    public String getCommand() {
+        return command;
     }
-    public Map<String, String> getOptions() { 
-        return options; 
+
+    public Map<String, String> getOptions() {
+        return options;
     }
 }

@@ -32,18 +32,73 @@ public class YAMLParse {
 
     public Note parse (String fileContent) {
         String[] parts = fileContent.split("---\\s*", 3);
-        if (parts.length <3) throw new IllegalArgumentException("Invaild note Format");
+        if (parts.length < 3) {
+            throw new IllegalArgumentException("Invalid note format");
+        }
 
         Yaml yaml = new Yaml();
-        Map<String, Object> yamlMap =yaml.load(new StringReader (parts[1]));
+        Map<String, Object> yamlMap = yaml.load(new StringReader(parts[1]));
 
-        UUID id =UUID.fromString ((String) yamlMap.get("id"));
+        // Handle different YAML formats
+        String id;
+        if (yamlMap.containsKey("id")) {
+            id = (String) yamlMap.get("id");
+        } else {
+            // Generate new ID for imported notes without one
+            id = java.util.UUID.randomUUID().toString();
+        }
+
+        // Get title - ADD THIS MISSING DECLARATION
         String title = (String) yamlMap.get("title");
-        List<String> tags = (List<String>) yamlMap.get("tags");
-        LocalDateTime createdAt = LocalDateTime.parse ((String) yamlMap.get("created_at"));
-        LocalDateTime updatedAt = LocalDateTime.parse ((String) yamlMap.get("updated_at"));
+        if (title == null) {
+            throw new IllegalArgumentException("Title is required");
+        }
+
+        // Handle different tag formats
+        List<String> tags = new ArrayList<>();
+        Object tagsObj = yamlMap.get("tags");
+        if (tagsObj instanceof List) {
+            tags = (List<String>) tagsObj;
+        } else if (tagsObj instanceof String) {
+            // Handle comma-separated tags
+            tags = Arrays.asList(((String) tagsObj).split(","));
+        }
+
+        // Handle different timestamp formats
+        LocalDateTime createdAt;
+        LocalDateTime updatedAt;
+
+        try {
+            Object createdObj = yamlMap.get("created_at");
+            if (createdObj == null) {
+                createdObj = yamlMap.get("created"); // Try alternative field name
+            }
+
+            if (createdObj != null) {
+                createdAt = LocalDateTime.parse(createdObj.toString().replace("Z", ""));
+            } else {
+                createdAt = LocalDateTime.now();
+            }
+
+            Object updatedObj = yamlMap.get("updated_at");
+            if (updatedObj == null) {
+                updatedObj = yamlMap.get("modified"); // Try alternative field name
+            }
+
+            if (updatedObj != null) {
+                updatedAt = LocalDateTime.parse(updatedObj.toString().replace("Z", ""));
+            } else {
+                updatedAt = LocalDateTime.now();
+            }
+
+        } catch (Exception e) {
+            // Fallback to current time if parsing fails
+            createdAt = LocalDateTime.now();
+            updatedAt = LocalDateTime.now();
+        }
+
         String content = parts[2].trim();
 
-        return new Note(id, title, content, tags, createdAt, updatedAt);
+        return new Note(java.util.UUID.fromString(id), title, content, tags, createdAt, updatedAt);
     }
 }
