@@ -58,15 +58,6 @@ public class NoteManager {
         }
     }
 
-    private Note loadNoteFromFile(Path filePath) {
-        try {
-            String content = Files.readString(filePath);
-            return yamlParser.parse(content);
-        } catch (IOException e) {
-            return null;
-        }
-    }
-
     public Note getNote(UUID id) {
         Path filePath = Paths.get(workingDirectory, id + ".md");
         if (Files.exists(filePath)) {
@@ -111,5 +102,20 @@ public class NoteManager {
         }
     
         return note;
+    }
+
+    public Note parseNoteFromYaml(String yamlContent) {
+        return yamlParser.deserialize(yamlContent);
+    }
+    
+    // Also add this if you want CLIHandler to load individual files
+    public Note loadNoteFromFile(Path filePath) {
+        try {
+            String content = Files.readString(filePath);
+            return yamlParser.deserialize(content);
+        } catch (IOException e) {
+            System.err.println("Error reading file: " + filePath);
+            return null;
+        }
     }
 }

@@ -2,20 +2,28 @@ package com.quickthought;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Scanner;
 import java.util.List;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.UUID;
 import java.util.Set;
 import java.util.stream.Collectors;
+import java.util.Optional;
+import java.io.Console;
+import java.io.File;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.nio.file.Path;
+import java.io.IOException; 
+import java.util.Base64;
 
 public class CLIHandler {
 
     private final String workingDirectory;
     private final NoteManager noteManager;
+    private String masterPassword = null;
+    private boolean encryptionEnabled = false;
 
     public CLIHandler(String workingDirectory) {
         this.workingDirectory = workingDirectory;
@@ -71,6 +79,12 @@ public class CLIHandler {
                 return executeImport(parsedCommand.getOptions());
             case "edit": // ← ADD THIS NEW CASE
                 return executeEdit(parsedCommand.getOptions());
+            case "encrypt":
+                return executeEncrypt(parsedCommand.getOptions());
+            case "lock":
+                return executeLock();
+            case "unlock":
+                return executeUnlock();
             case "help":
             case "--help":
                 return executeHelp();
@@ -109,7 +123,7 @@ public class CLIHandler {
     }
 
     private boolean executeList(Map<String, String> options) {
-        List<Note> notes = noteManager.getAllNotes();
+        List<Note> notes = getAllNotesIncludingEncrypted();  
 
         if (notes.isEmpty()) {
             System.out.println("No notes found.");
@@ -130,32 +144,52 @@ public class CLIHandler {
 
     private boolean executeRead(Map<String, String> options) {
         String id = options.get("id");
-        if (id == null) {
-            System.out.println("Error: --id required for read command");
+        String title = options.get("title");
+
+        if (id == null && title == null) {
+            System.out.println("  Error: Specify either --id or --title");
+            System.out.println("  Usage:");
+            System.out.println("   read --id <note-id>");
+            System.out.println("   read --title <note-title>");
+            System.out.println("   show abc123");
+            System.out.println("   view \"My Note Title\"");
             return false;
         }
 
         try {
-            UUID noteId = UUID.fromString(id);
-            Note note = noteManager.getNote(noteId);
+            Note note = null;
+
+            if (id != null) {
+                // Find note by ID (supports partial matching)
+                note = findNoteById(id);
+            } else {
+                // Find note by exact title
+                note = findNoteByTitle(title);
+            }
 
             if (note == null) {
-                System.out.println("Note not found with ID: " + id);
+                if (id != null) {
+                    System.out.println(" Note not found with ID: " + id);
+                } else {
+                    System.out.println(" Note not found with title: " + title);
+                }
                 return false;
             }
 
-            System.out.println("Title: " + note.getTitle());
-            System.out.println("Content: " + note.getContent());
-            System.out.println("Tags: " + note.getTags());
-            System.out.println("Created: " + note.getCreatedAt());
-            System.out.println("Updated: " + note.getUpdatedAt());
+            // Display the note
+            System.out.println(" Title: " + note.getTitle());
+            System.out.println(" Content: " + note.getContent());
+            System.out.println("  Tags: " + note.getTags());
+            System.out.println(" Created: " + note.getCreatedAt());
+            System.out.println(" Updated: " + note.getUpdatedAt());
+            System.out.println(" ID: " + note.getId().toString().substring(0, 8));
 
-        } catch (IllegalArgumentException e) {
-            System.out.println("Error: Invalid ID format");
+            return true;
+
+        } catch (Exception e) {
+            System.out.println(" Error reading thought: " + e.getMessage());
             return false;
         }
-
-        return true;
     }
 
     private boolean executeSearch(Map<String, String> options) {
@@ -165,7 +199,12 @@ public class CLIHandler {
             return false;
         }
 
-        List<Note> results = noteManager.searchNotes(query);
+        // Change this line:
+        List<Note> allNotes = getAllNotesIncludingEncrypted();  
+        List<Note> results = allNotes.stream()
+            .filter(note -> note.getTitle().toLowerCase().contains(query.toLowerCase()) ||
+                           note.getContent().toLowerCase().contains(query.toLowerCase()))
+            .collect(Collectors.toList());
 
         if (results.isEmpty()) {
             System.out.println("No notes found matching: " + query);
@@ -206,7 +245,13 @@ public class CLIHandler {
     }
 
     private boolean executeHelp() {
-        System.out.println("QuickThought - A simple note-taking CLI");
+        System.out.println("QuickThought - Let your thoughts run free!");
+        System.out.println(" Encryption Commands:");
+        System.out.println("  encrypt abc123                              # Encrypt note by ID");
+        System.out.println("  encrypt \"My Note\"                          # Encrypt note by title");
+        System.out.println("  unlock                                       # Enter master password");
+        System.out.println("  lock                                         # Clear password from memory");
+        System.out.println();
         System.out.println();
         System.out.println(" Natural Language Commands:");
         System.out.println("  new \"My Title\" \"Content here\"              # Create a new note");
@@ -249,7 +294,7 @@ public class CLIHandler {
         System.out.println("  quickthought find \"shopping\"");
         System.out.println("  quickthought show \"Shopping\"");
         System.out.println("  quickthought list all");
-        
+
         return true;
     }
 
@@ -261,8 +306,6 @@ public class CLIHandler {
             return false;
         }
 
-        System.out.println("DEBUG: Trying to import: " + filePath);
-
         try {
             java.nio.file.Path sourceFile = java.nio.file.Paths.get(filePath);
             if (!java.nio.file.Files.exists(sourceFile)) {
@@ -271,7 +314,6 @@ public class CLIHandler {
             }
 
             String content = java.nio.file.Files.readString(sourceFile);
-            System.out.println("DEBUG: File content length: " + content.length());
             Note note = noteManager.parseAndCreateNote(content);
 
             System.out.println("Note imported successfully!");
@@ -336,15 +378,37 @@ public class CLIHandler {
     }
 
     private Note findNoteById(String id) {
-        List<Note> notes = noteManager.getAllNotes();
-        return notes.stream()
-                .filter(note -> note.getId().toString().startsWith(id))
-                .findFirst()
-                .orElse(null);
+        List<Note> notes = getAllNotesIncludingEncrypted();
+        
+        
+        for (Note note : notes) {
+            String noteId = note.getId().toString();
+            System.out.println("  - " + noteId.substring(0, Math.min(8, noteId.length())) + " : " + note.getTitle());
+        }
+        
+        // Try partial match
+        Optional<Note> match = notes.stream()
+            .filter(note -> {
+                String noteId = note.getId().toString().toLowerCase();
+                String searchId = id.toLowerCase();
+                boolean matches = noteId.startsWith(searchId);
+                if (matches) {
+                    System.out.println(" Found match: " + noteId);
+                }
+                return matches;
+            })
+            .findFirst();
+        
+        if (match.isPresent()) {
+            return match.get();
+        } else {
+            System.out.println(" No note found starting with: " + id);
+            return null;
+        }
     }
 
     private Note findNoteByTitle(String title) {
-        List<Note> notes = noteManager.getAllNotes();
+        List<Note> notes = getAllNotesIncludingEncrypted();  
         return notes.stream()
                 .filter(note -> note.getTitle().equals(title))
                 .findFirst()
@@ -367,6 +431,10 @@ public class CLIHandler {
             case "change":
             case "update":
                 return "edit";
+            case "secure":           
+            case "protect":
+            case "lock-note":        
+                return "encrypt";
             case "find":
             case "lookup":
             case "locate":
@@ -399,6 +467,7 @@ public class CLIHandler {
 
             case "read":
             case "edit":
+            case "encrypt":
                 if (!options.containsKey("id") && !options.containsKey("title") && !positionalArgs.isEmpty()) {
                     String firstArg = positionalArgs.get(0);
                     // If it looks like an ID (starts with alphanumeric), treat as ID
@@ -435,6 +504,238 @@ public class CLIHandler {
         }
     }
 
+
+    // Add this method to CLIHandler
+    private boolean verifyPassword(String password) {
+        try {
+            File passwordTestFile = new File(workingDirectory + "/.quickthought_auth");
+
+            if (passwordTestFile.exists()) {
+                // Existing setup - verify password
+                String testData = new String(java.nio.file.Files.readAllBytes(passwordTestFile.toPath()));
+                return NoteEncryption.testPassword(testData, password);
+            } else {
+                // First time setup - create password verification file
+                String testString = "QuickThought_Password_Test_" + System.currentTimeMillis();
+                String encryptedTest = NoteEncryption.encrypt(testString, password);
+                java.nio.file.Files.write(passwordTestFile.toPath(), encryptedTest.getBytes());
+
+                System.out.println(" Master password set successfully!");
+                return true;
+            }
+        } catch (Exception e) {
+            System.err.println("Password verification error: " + e.getMessage());
+            return false;
+        }
+    }
+
+    // Add this method to clear password from memory
+    private void lockSession() {
+        masterPassword = null;
+        encryptionEnabled = false;
+        System.out.println(" Session locked - password cleared from memory");
+    }
+
+    private boolean executeEncrypt(Map<String, String> options) {
+        String noteId = options.get("id");
+        String noteTitle = options.get("title");
+
+        if (noteId == null && noteTitle == null) {
+            System.out.println(" Error: Specify either --id or --title");
+            System.out.println(" Usage: encrypt --id <note-id> OR encrypt --title <note-title>");
+            return false;
+        }
+
+        if (!promptForPassword()) {
+            return false;
+        }
+
+        try {
+            Note note = null;
+            if (noteId != null) {
+                note = findNoteById(noteId);
+            } else {
+                note = findNoteByTitle(noteTitle);
+            }
+
+            if (note == null) {
+                System.out.println(" Note not found");
+                return false;
+            }
+
+            // Read the original file
+            String originalPath = workingDirectory + "/" + note.getId() + ".md";
+            String content = new String(java.nio.file.Files.readAllBytes(java.nio.file.Paths.get(originalPath)));
+
+            // Encrypt the content
+            String encryptedContent = NoteEncryption.encrypt(content, masterPassword);
+
+            // Save as encrypted file
+            String encryptedPath = workingDirectory + "/" + note.getId() + ".md.enc";
+            java.nio.file.Files.write(java.nio.file.Paths.get(encryptedPath), encryptedContent.getBytes());
+
+            // Delete original file
+            java.nio.file.Files.delete(java.nio.file.Paths.get(originalPath));
+
+            System.out.println(" Note encrypted successfully");
+            System.out.println(" File: " + note.getId().toString().substring(0, 8) + ".md.enc");
+
+            return true;
+
+        } catch (Exception e) {
+            System.out.println(" Encryption failed: " + e.getMessage());
+            return false;
+        }
+    }
+
+    private boolean executeLock() {
+        lockSession();
+        return true;
+    }
+
+    private boolean executeUnlock() {
+        masterPassword = null; // Clear existing password
+        return promptForPassword();
+    }
+
+    private List<Note> getAllNotesIncludingEncrypted() {
+        List<Note> allNotes = new ArrayList<>();
+        
+        try {
+            Path workingPath = Paths.get(workingDirectory);
+            
+            if (!Files.exists(workingPath)) {
+                return allNotes;
+            }
+            
+            Files.list(workingPath)
+                .filter(path -> path.toString().endsWith(".md") || 
+                               path.toString().endsWith(".md.enc")) 
+                .forEach(path -> {
+                    try {
+                        Note note = loadNoteFromFile(path);
+                        if (note != null) {
+                            allNotes.add(note);
+                        }
+                    } catch (Exception e) {
+                        System.err.println("Warning: Could not load note from " + path.getFileName());
+                    }
+                });
+            
+        } catch (IOException e) {
+            System.err.println("Error reading notes directory: " + e.getMessage());
+        }
+        
+        return allNotes;
+    }
+
+    private Note loadNoteFromFile(Path filePath) {
+        try {
+            String content = Files.readString(filePath);
+            String fileName = filePath.getFileName().toString();
+            
+            // Check if this is an encrypted file by extension
+            if (fileName.endsWith(".md.enc")) {
+                if (!encryptionEnabled || masterPassword == null) {
+                    // Return a placeholder note for encrypted files when locked
+                    return createEncryptedPlaceholder(filePath);
+                }
+                // Decrypt the content if we have the password
+                content = decryptContent(content);
+                if (content == null) {
+                    return createEncryptedPlaceholder(filePath); // Decryption failed
+                }
+            }
+            
+            // Parse the YAML content to create a Note object
+            return parseNoteFromYaml(content, filePath);
+            
+        } catch (IOException e) {
+            System.err.println("Error reading file: " + filePath);
+            return null;
+        }
+    }
+
+    public boolean isEncryptedFile(String content) {
+        // Base64 encrypted content detection
+        try {
+            // If it's valid Base64 and looks like encrypted data, treat as encrypted
+            Base64.getDecoder().decode(content.trim());
+            return content.trim().length() > 100 && !content.contains("---"); // Not YAML
+        } catch (IllegalArgumentException e) {
+            return false;
+        }
+    }
+
+    private Note createEncryptedPlaceholder(Path filePath) {
+        // Extract ID from filename (remove both .md and .enc extensions)
+        String fileName = filePath.getFileName().toString();
+        String idString = fileName.replace(".md.enc", "").replace(".md", "");
+        
+        try {
+            // Create a placeholder note that shows it's encrypted
+            Note placeholder = new Note("[ENCRYPTED] " + idString.substring(0, 8), 
+                                  "This note is encrypted. Use 'unlock' command to access.", 
+                                  Arrays.asList("encrypted", "locked"));
+            return placeholder;
+        } catch (Exception e) {
+            return null; // Invalid filename format
+        }
+    }
+
+    private String decryptContent(String encryptedContent) {
+        try {
+            return NoteEncryption.decrypt(encryptedContent, masterPassword);
+        } catch (Exception e) {
+            System.err.println("Failed to decrypt content: " + e.getMessage());
+            return null;
+        }
+    }
+
+    private Note parseNoteFromYaml(String yamlContent, Path filePath) {
+        try {
+            return noteManager.parseNoteFromYaml(yamlContent);
+        } catch (Exception e) {
+            System.err.println("Error parsing YAML from file: " + filePath);
+            return null;
+        }
+    }
+
+    private boolean promptForPassword() {
+        if (masterPassword != null) {
+            return true;
+        }
+
+        Console console = System.console();
+        char[] passwordArray;
+        
+        if (console != null) {
+            passwordArray = console.readPassword(" Enter master password: ");
+        } else {
+            Scanner scanner = new Scanner(System.in);
+            System.out.print(" Enter master password: ");
+            String password = scanner.nextLine();
+            passwordArray = password.toCharArray();
+        }
+
+        if (passwordArray == null || passwordArray.length == 0) {
+            System.out.println(" Password cannot be empty");
+            return false;
+        }
+
+        String password = new String(passwordArray);
+        Arrays.fill(passwordArray, ' '); // Clear from memory
+
+        if (verifyPassword(password)) {
+            masterPassword = password;
+            encryptionEnabled = true;
+            System.out.println(" Authentication successful");
+            return true;
+        } else {
+            System.out.println(" Incorrect password");
+            return false;
+        }
+    }
 }
 
 class ParsedCommand {

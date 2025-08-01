@@ -5,6 +5,7 @@ import java.util.Scanner;
 
 public class QuickThought {
     public static void main(String[] args) {
+        // Clear immediately
         clearTerminal();
 
         if (args.length == 0) {
@@ -184,31 +185,35 @@ public class QuickThought {
                 // Windows
                 new ProcessBuilder("cmd", "/c", "cls").inheritIO().start().waitFor();
             } else {
-                // For Mac/Linux - try multiple approaches
-                
-                // Method 1: Use system clear command
-                try {
-                    new ProcessBuilder("clear").inheritIO().start().waitFor();
-                } catch (Exception e) {
-                    // Method 2: ANSI escape sequences
-                    System.out.print("\033[2J");    // Clear entire screen
-                    System.out.print("\033[H");     // Move cursor to top-left
-                    System.out.flush();
-                    
-                    // Method 3: Alternative ANSI codes
-                    System.out.print("\033[2J\033[3J\033[H");
-                    System.out.flush();
-                }
+                // Mac/Linux - try system command first
+                ProcessBuilder pb = new ProcessBuilder("clear");
+                pb.inheritIO();
+                Process process = pb.start();
+                process.waitFor();
             }
             
-            // Additional flush to ensure clearing happens
+            // Always also send ANSI codes as backup
+            System.out.print("\033[2J\033[H");
             System.out.flush();
             
         } catch (Exception e) {
-            // Fallback - print many newlines to push content up
+            // Fallback - use multiple methods
+            System.out.print("\033[2J\033[H");
+            System.out.print("\033[3J"); // Clear scrollback on some terminals
+            System.out.flush();
+            
+            // If ANSI doesn't work, use newlines
             for (int i = 0; i < 100; i++) {
                 System.out.println();
             }
         }
+    }
+
+    private static void fallbackClear() {
+        // Print enough lines to push content off most terminal windows
+        for (int i = 0; i < 100; i++) {
+            System.out.println();
+        }
+        System.out.flush();
     }
 }

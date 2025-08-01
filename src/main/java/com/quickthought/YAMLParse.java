@@ -6,28 +6,21 @@ import org.yaml.snakeyaml.constructor.Constructor;
 import java.io.StringReader;
 import java.io.StringWriter;
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.*;
 public class YAMLParse {
     
     public String serialize (Note note) {
-        Map<String, Object> yamlMap = new LinkedHashMap<>();
-        yamlMap.put("id", note.getId().toString());
-        yamlMap.put("title", note.getTitle());
-        yamlMap.put("tags", note.getTags());
-        yamlMap.put("created_at", note.getCreatedAt().toString());
-        yamlMap.put("updated_at", note.getUpdatedAt().toString());
-
-
-        Yaml yaml = new Yaml();
-        StringWriter writer = new StringWriter();
-
-        
-        writer.write("---\n");
-        yaml.dump(yamlMap, writer);
-        writer.write("---\n");
-        writer.write(note.getContent());
-
-        return writer.toString();
+        StringBuilder yaml = new StringBuilder();
+        yaml.append("---\n");
+        yaml.append("id: ").append(note.getId()).append("\n");
+        yaml.append("title: \"").append(escapeYaml(note.getTitle())).append("\"\n");
+        yaml.append("created: ").append(note.getCreatedAt().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME)).append("\n");
+        yaml.append("updated: ").append(note.getUpdatedAt().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME)).append("\n");
+        yaml.append("tags: [").append(String.join(", ", note.getTags())).append("]\n");
+        yaml.append("---\n");
+        yaml.append(note.getContent());
+        return yaml.toString();
     }
 
     public Note parse (String fileContent) {
@@ -99,6 +92,42 @@ public class YAMLParse {
 
         String content = parts[2].trim();
 
-        return new Note(java.util.UUID.fromString(id), title, content, tags, createdAt, updatedAt);
+        // In YAMLParse.parse() method, make sure you handle the ID correctly:
+        String idString = (String) yamlMap.get("id");
+        UUID noteId;
+
+        try {
+            if (idString != null) {
+                noteId = UUID.fromString(idString);
+            } else {
+                noteId = UUID.randomUUID();
+            }
+        } catch (IllegalArgumentException e) {
+            // If the stored ID isn't a valid UUID, generate a new one
+            System.err.println("Warning: Invalid UUID in note, generating new ID");
+            noteId = UUID.randomUUID();
+        }
+
+        // Create note with the parsed/generated ID
+        return new Note(noteId, title, content, tags, createdAt, updatedAt);
+    }
+    
+    public Note deserialize(String yamlContent) {
+        return parse(yamlContent); // Use the same logic
+    }
+    
+    private String extractValue(String yamlContent, String key) {
+        String[] lines = yamlContent.split("\n");
+        for (String line : lines) {
+            if (line.trim().startsWith(key + ":")) {
+                return line.substring(line.indexOf(":") + 1).trim();
+            }
+        }
+        return "";
+    }
+    
+    private String escapeYaml(String value) {
+        // Basic YAML escaping
+        return value.replace("\"", "\\\"");
     }
 }
